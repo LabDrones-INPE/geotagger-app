@@ -69,7 +69,10 @@ jobs:
         run: |
           cd portal
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions[bot]@://github.com"
           git add binaries/
-          git commit -m "Update geotagger binaries (Release ${{ github.ref_name }})" || exit 0
+          # A quebra de linha dupla e a tag abaixo vinculam você como coautor do commit
+          git commit -m "Update geotagger binaries (Release ${{ github.ref_name }})
+
+          Co-authored-by: Marcos Rodrigues <marcos_lrodrigues@yahoo.com.br>" || exit 0
           git push
