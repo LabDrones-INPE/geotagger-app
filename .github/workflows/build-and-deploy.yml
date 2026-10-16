@@ -1,0 +1,75 @@
+name: Build and Deploy Binaries to Portal
+
+on:
+  push:
+    tags:
+      - 'v*' # Dispara o build em tags como v1.0.0, v1.0.1
+
+jobs:
+  build:
+    name: Build Multiplatform Executables
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: geotagger-linux
+          - os: windows-latest
+            asset_name: geotagger-windows.exe
+
+    steps:
+      - name: Checkout Private Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Executable with PyInstaller
+        run: |
+          pyinstaller --onefile --noconsole --name="${{ matrix.asset_name }}" geotagger_app.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+
+  deploy:
+    name: Commit Executables to Public Portal Repository
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Public Portal Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'LabDrones-INPE/LabDrones-INPE.github.io'
+          token: ${{ secrets.PORTAL_DEPLOY_TOKEN }}
+          path: portal
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy Binaries to Portal Folder
+        run: |
+          mkdir -p portal/binaries
+          cp artifacts/geotagger-windows.exe/geotagger-windows.exe portal/binaries/
+          cp artifacts/geotagger-linux/geotagger-linux portal/binaries/
+
+      - name: Commit and Push Changes to Public Repo
+        run: |
+          cd portal
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add binaries/
+          git commit -m "Update geotagger binaries (Release ${{ github.ref_name }})" || exit 0
+          git push
