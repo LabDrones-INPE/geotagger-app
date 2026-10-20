@@ -824,52 +824,13 @@ example_labdrones_html = """<!DOCTYPE html>
 def open_html_in_browser(file_path):
     """
     Opens the HTML file in the default browser.
-    Supports WSL (Windows Host), Linux, and native Windows environments.
     """
     abs_path = os.path.abspath(file_path)
 
-    # Detects if it is running inside WSL
-    is_wsl = 'microsoft' in os.uname().release.lower() or 'wsl' in os.uname().release.lower()
-
-    if is_wsl:
-        try:
-            return webbrowser.open(f"file://{abs_path}")
-        except Exception:
-            try:
-                # 1. Try using wslview (a native tool from the wslutil suite)
-                subprocess.run(
-                    ['wslview', abs_path], 
-                    check=True, 
-                    stdout=subprocess.DEVNULL, 
-                    stderr=subprocess.DEVNULL
-                )
-                return True
-            except (FileNotFoundError, subprocess.CalledProcessError):
-                try:
-                    # 2. Converte o caminho do Linux para Windows (ex: C:\Users\...)
-                    win_path = subprocess.check_output(['wslpath', '-w', abs_path]).decode('utf-8').strip()
-                    
-                    # Define o caminho de trabalho no formato do WSL (/mnt/c/Windows/Temp)
-                    wsl_temp_dir = '/mnt/c/Windows/Temp' if os.path.exists('/mnt/c/Windows/Temp') else '/tmp'
-
-                    # Executa o cmd.exe do Windows sem alerta de caminho UNC
-                    subprocess.run(
-                        ['cmd.exe', '/c', 'start', '', win_path],
-                        cwd=wsl_temp_dir,
-                        check=True,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                    return True
-                except Exception as e:
-                    print(f"Erro ao abrir via WSL/cmd.exe: {e}")
-
-    # Fallback para ambientes Linux nativos ou Windows compilado
     try:
         return webbrowser.open(f"file://{abs_path}")
     except Exception:
         return False
-    
     
 
 def open_window_about():
