@@ -24,7 +24,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12' # Garantir estabilidade
+          python-version: '3.12'
 
       - name: Install Dependencies
         run: |
@@ -32,9 +32,68 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Executable with PyInstaller
+      # Extracts and cleans the tag for the Windows format (X.X.X.X)
+      - name: Create Windows Version Metadata
+        if: matrix.os == 'windows-latest'
+        shell: bash
         run: |
-          pyinstaller --onefile --noconsole --name="${{ matrix.asset_name }}" geotagger_app.py
+          # Extract only the numbers from the tag (e.g., v1.2.3 becomes 1.2.3)
+          CLEAN_VERSION=$(echo "${{ github.ref_name }}" | sed 's/[^0-9.]//g')
+          
+          # Ensures the 4-digit format required by Windows (e.g., 1.2.3 becomes 1.2.3.0)
+          DOT_COUNT=$(echo -n "$CLEAN_VERSION" | tr -cd '.' | wc -c)
+          if [ "$DOT_COUNT" -eq 2 ]; then
+            WIN_VERSION="${CLEAN_VERSION}.0"
+          else
+            WIN_VERSION="$CLEAN_VERSION"
+          fi
+          
+          # Converts the string format "1.2.3.0" into a tuple of integers "(1, 2, 3, 0)"
+          TUPLE_VERSION=$(echo "$WIN_VERSION" | sed 's/\./, /g')
+
+          cat << EOF > file_version_info.txt
+          VSVersionInfo(
+            ffi=FixedFileInfo(
+              filevers=($TUPLE_VERSION),
+              prodvers=($TUPLE_VERSION),
+              mask=0x3f,
+              flags=0x0,
+              OS=0x40004,
+              fileType=0x1,
+              subtype=0x0,
+              date=(0, 0)
+            ),
+            kids=[
+              StringFileInfo(
+                [
+                  StringTable(
+                    '041604b0',
+                    [
+                      StringStruct('CompanyName', 'LabDrones-INPE'),
+                      StringStruct('FileDescription', 'Geotagger App - Scientific Tool'),
+                      StringStruct('FileVersion', '$WIN_VERSION'),
+                      StringStruct('InternalName', 'geotagger-app'),
+                      StringStruct('LegalCopyright', 'Copyright (c) 2026 LabDrones-INPE'),
+                      StringStruct('OriginalFilename', 'geotagger-windows.exe'),
+                      StringStruct('ProductName', 'geotagger-app'),
+                      StringStruct('ProductVersion', '$WIN_VERSION')
+                    ]
+                  )
+                ]
+              ),
+              VarFileInfo([VarSysStruct('Translation',)])
+            ]
+          )
+          EOF
+
+      - name: Build Executable with PyInstaller
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            pyinstaller --onefile --noconsole --version-file=file_version_info.txt --icon=logo.ico --name="${{ matrix.asset_name }}" geotagger_app.py
+          else
+            pyinstaller --onefile --noconsole --name="${{ matrix.asset_name }}" geotagger_app.py
+          fi
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -71,7 +130,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@://github.com"
           git add binaries/
-          # A quebra de linha dupla e a tag abaixo vinculam você como coautor do commit
           git commit -m "Update geotagger binaries (Release ${{ github.ref_name }})
 
           Co-authored-by: Marcos Rodrigues <marcos_lrodrigues@yahoo.com.br>" || exit 0
