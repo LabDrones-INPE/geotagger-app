@@ -81,7 +81,7 @@ jobs:
                   )
                 ]
               ),
-              VarFileInfo([VarSysStruct('Translation',)])
+              VarFileInfo([VarStruct('Translation', [1046, 1200])])
             ]
           )
           EOF
