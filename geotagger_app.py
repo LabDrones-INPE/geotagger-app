@@ -831,13 +831,13 @@ def open_html_in_browser(file_path):
         return webbrowser.open(f"file://{abs_path}")
     except Exception:
         return False
-    
+
 
 def open_window_about():
     # Tab 1: Third-Party Licenses
     tab_licenses = [
         [sg.Text("Third-Party Open Source Components:", font=("Helvetica", 11, "bold"))],
-        [sg.Multiline( LEAFLET_PLAYBACK_LICENSE, disabled=True, font=multiline_text_font, expand_x=True, expand_y=True, autoscroll=True)]
+        [sg.Multiline(LEAFLET_PLAYBACK_LICENSE, disabled=True, font=multiline_text_font, expand_x=True, expand_y=True, autoscroll=True)]
     ]
 
     # Tab 2: Acknowledgments and Funding
@@ -846,9 +846,9 @@ def open_window_about():
         [sg.Multiline(WELLCOME_NOTICE, disabled=True, font=("Helvetica", 11), expand_x=True, expand_y=True)]
     ]
 
-    # General Layout of the Modal Window with TabGroup
+    # General Layout
     layout_sobre = [
-        [sg.Text("LabDrones Geotagging Tool", font=("Helvetica", 14, "bold"))],
+        [sg.Text("LabDrones Geotagging Tool", font=("Helvetica", 14, "bold"), pad=((10, 10), (15, 5)))],
         [
             sg.TabGroup(
                 [[
@@ -856,7 +856,8 @@ def open_window_about():
                     sg.Tab("Acknowledgments", tab_ack)
                 ]],
                 expand_x=True,
-                expand_y=True
+                expand_y=True,
+                pad=(10, 10)
             )
         ],
         [
@@ -870,18 +871,22 @@ def open_window_about():
         "About, Licenses and Acknowledgments",
         layout_sobre,
         size=(modal_width, modal_height),
-        resizable=True,
-        modal=True,
+        resizable=True, 
+        keep_on_top=True,
         finalize=True
     )
 
-    # Force update and focus
-    window_about.refresh()
-    window_about.bring_to_front()
+    try:
+        # Links to the main window so that Linux understands the correct window stacking order
+        window_about.TKroot.transient(window.TKroot) 
+        # Forces immediate rendering without waiting for mouse movement
+        window_about.TKroot.update() 
+    except Exception as e:
+        pass
 
     while True:
         event, _ = window_about.read()
-        if event in (sg.WINDOW_CLOSED, "-CLOSE_ABOUT-", "Close"):
+        if event in (sg.WINDOW_CLOSED, "-CLOSE_ABOUT-"):
             break
 
     window_about.close()
@@ -1229,7 +1234,7 @@ while True:
 
     # Event to open the About/Licenses window
     if event in ('About / Licenses', '&About / Licenses', '-ABOUT-'):
-        open_window_about()    
+        open_window_about()
 
     # Folder name was filled in, make a list of files in the folder
     if event == "-FOLDER-":
