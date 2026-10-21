@@ -1247,7 +1247,10 @@ while True:
         if len(file_list) > 0:            
             window['-FILE LIST-'].update(file_list)
             window.refresh()            
-            process_flights(file_list)            
+            process_flights(file_list)
+        else:
+            window['-FILE LIST-'].update([])
+            window.refresh()            
 
 # --------------------------------- Close & Exit ---------------------------------
 window.close()
