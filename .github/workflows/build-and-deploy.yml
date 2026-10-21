@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-22.04       # <-- Ensures an older GLIBC for maximum Linux compatibility
             asset_name: geotagger-linux
           - os: windows-latest
             asset_name: geotagger-windows.exe
@@ -25,6 +25,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      # For PyInstaller to compile graphical interfaces (Tkinter) on Ubuntu 22.04,
+      # Sometimes it is necessary to ensure that the Tkinter and X11 development libraries are present on the runner.
+      - name: Install Linux System Dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
 
       - name: Install Dependencies
         run: |
