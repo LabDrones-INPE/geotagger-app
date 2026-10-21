@@ -1244,12 +1244,21 @@ while True:
         except:
             file_list = []
 
-        if len(file_list) > 0:            
-            window['-FILE LIST-'].update(file_list)
+        if len(file_list) > 0:
+            window["-FILE LIST-"].update(file_list)
+            try:
+                window["-FILE LIST-"].Widget.configure(fg="black")
+            except:
+                pass
             window.refresh()            
             process_flights(file_list)
         else:
-            window['-FILE LIST-'].update([])
+            empty_msg = ["No flight containing .JPG files was found in the selected folder!"]
+            window["-FILE LIST-"].update(empty_msg)
+            try:
+                window["-FILE LIST-"].Widget.configure(fg="#d32f2f")
+            except:
+                pass
             window.refresh()            
 
 # --------------------------------- Close & Exit ---------------------------------
