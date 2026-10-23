@@ -107,7 +107,7 @@ sg.LOOK_AND_FEEL_TABLE['LabDrones'] = {
     'INPUT': '#ffffff',
     'TEXT_INPUT': '#1a1a1a',
     'SCROLL': '#16a085',
-    'BUTTON': ('#ffffff', '#1a1a1a'), # Texto branco, botão escuro
+    'BUTTON': ('#ffffff', '#1a1a1a'), 
     'PROGRESS': ('#16a085', '#e0e0e0'),
     'BORDER': 1,
     'SLIDER_DEPTH': 1,
