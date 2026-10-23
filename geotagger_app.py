@@ -1217,8 +1217,8 @@ layout = [[sg.Menu(menu_def, key='-MENU-', font=("Helvetica", 12, "bold"))],
 
 # --------------------------------- Create Window ---------------------------------
 window = sg.Window(title_name, layout, finalize=True, size=(width,height), location=(0,0),
-                   right_click_menu=sg.MENU_RIGHT_CLICK_EDITME_VER_EXIT, keep_on_top=True, use_custom_titlebar=use_custom_titlebar,
-                   enable_close_attempted_event=True, grab_anywhere=True)
+                   keep_on_top=True, use_custom_titlebar=use_custom_titlebar,
+                   enable_close_attempted_event=True, grab_anywhere=True, right_click_menu=None)
 
 
 # Increases the global scale of the interface and native windows (FolderBrowse/FileDialog)
