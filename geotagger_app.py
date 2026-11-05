@@ -897,8 +897,8 @@ def _rm_file(filename):
         with suppress(FileNotFoundError):
             os.remove(filename)
     except OSError as err:
-       print(err)
-         
+       sg.popup_error(f"Error remove file:\n{err}", title="Error", keep_on_top=True)
+
 
 def popup(message, progress_bar=0):
     sg.theme('DarkGrey')    
@@ -954,9 +954,9 @@ def get_exif_info(img_path):
             lon = decimal_coords(coordenadas[4], coordenadas[3])
             
         except KeyError:
-            print('No Coordinates')            
+            sg.popup_error(f"Error image doesn't have coordinates:\n{img_path}", title="Critical Error", keep_on_top=True)            
     else:
-        print('The image has no EXIF information:\n'+img_path)
+        sg.popup_error(f"The image has no EXIF information:\n{img_path}", title="Critical Error", keep_on_top=True)
         return None
 
     return {'focal_lenght':float(exif['FocalLength']),'date':str(exif['DateTime']),'img_dim_x':int(exif['ExifImageWidth']),'img_dim_y':int(exif['ExifImageHeight']),'center_coords':(float(lat),float(lon)),'altitude':float(altitude)}
