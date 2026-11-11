@@ -110,35 +110,21 @@ jobs:
           path: dist/${{ matrix.asset_name }}
 
   deploy:
-    name: Commit Executables to Public Portal Repository
+    name: Publish Binaries to GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allows the native token to create the Release
     steps:
-      - name: Checkout Public Portal Repository
-        uses: actions/checkout@v4
-        with:
-          repository: 'LabDrones-INPE/LabDrones-INPE.github.io'
-          token: ${{ secrets.PORTAL_DEPLOY_TOKEN }}
-          path: portal
-
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Copy Binaries to Portal Folder
-        run: |
-          mkdir -p portal/binaries
-          cp artifacts/geotagger-windows.exe/geotagger-windows.exe portal/binaries/
-          cp artifacts/geotagger-linux/geotagger-linux portal/binaries/
-
-      - name: Commit and Push Changes to Public Repo
-        run: |
-          cd portal
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@://github.com"
-          git add binaries/
-          git commit -m "Update geotagger binaries (Release ${{ github.ref_name }})
-
-          Co-authored-by: Marcos Rodrigues <marcos_lrodrigues@yahoo.com.br>" || exit 0
-          git push
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true # Automatically lists commits and closed issues
+          files: |
+            artifacts/geotagger-windows.exe/geotagger-windows.exe
+            artifacts/geotagger-linux/geotagger-linux
