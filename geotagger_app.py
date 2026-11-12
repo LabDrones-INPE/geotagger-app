@@ -25,14 +25,14 @@
 # --------------------------
 #        Imports
 # --------------------------
-import PySimpleGUI as sg
 import tkinter as tk
+import PySimpleGUI as sg
 import os
 import sys
 import logging
-from PIL import Image, ExifTags
+import exifread
 from pathlib import Path
-import matplotlib.colors as mcolors
+import colorsys
 import random
 import pandas as pd
 import datetime
@@ -52,11 +52,6 @@ logging.basicConfig(
     datefmt='%d/%m/%Y %H:%M:%S'
 )
 
-# Creates a hidden Tkinter instance to register the font for the global menu
-root = tk.Tk()
-root.withdraw()  # Hides the native Tkinter window.
-root.option_add('*Menu.font', 'Helvetica 14 bold')  # Adjust the size (eg.: 12, 14)
-root.option_add('*Menu.tearOff', False)  # Removes the native dotted line from the Linux menu
 
 # Enables High DPI support in Windows to avoid small or blurry fonts
 if sys.platform.startswith('win'):
@@ -68,6 +63,14 @@ if sys.platform.startswith('win'):
         except Exception:
             pass
 
+# Get screen size
+screen_width, screen_height = sg.Window.get_screen_size()
+height = int(screen_height * 0.9)
+width = int(screen_width * 0.98)
+
+# Set a proportional size for the modal window (e.g., 50% width and 60% height)
+modal_width = int(screen_width * 0.50)
+modal_height = int(screen_height * 0.60)
 
 LEAFLET_PLAYBACK_LICENSE = """
 Leaflet-Playback Plugin
@@ -94,13 +97,13 @@ WELLCOME_NOTICE = (
 
 
 
-#To handle with tqdm bug  when run aplication through a GUI no console interface
+#To handle bug  when run aplication through a GUI no console interface
 class NullWriter:
     def write(self, data):
         pass
 
 # Override stdout and stderr with NullWriter in GUI --noconsole mode
-# This allow to avoid a bug where tqdm try to write on NoneType
+# This allow to avoid a bug where try to write on NoneType
 if sys.stdout is None:
     sys.stdout = NullWriter()
 
@@ -136,22 +139,7 @@ reduced_text_font = ("Helvetica", 10, "bold")
 
 # Set options
 sg.set_options(font=standard_font)
-use_custom_titlebar = False
 title_name = 'LabDrones Geotagging Tool'
-
-
-# Get screen size
-screen_width, screen_height = sg.Window.get_screen_size()
-height = int(screen_height * 0.9)
-width = int(screen_width * 0.98)
-
-# Set a proportional size for the modal window (e.g., 50% width and 60% height)
-modal_width = int(screen_width * 0.50)
-modal_height = int(screen_height * 0.60)
-
-# Javascript file options
-names_color = list(mcolors.CSS4_COLORS)
-random.shuffle(names_color)
 
 example_labdrones_html = """<!DOCTYPE html>
 <html>
@@ -238,6 +226,22 @@ path_outputs = os.path.join(os.getcwd(),'geotagger_app-files-out')
 # --------------------------
 #        Functions
 # --------------------------
+def gerar_cores_escuras(qtd=150):
+    cores = []
+    for _ in range(qtd):
+        h = random.random()                # Matiz (0.0 a 1.0 - percorre todas as cores)
+        s = random.uniform(0.75, 1.0)      # Saturação alta (evita tons pastel/acinzentados)
+        v = random.uniform(0.45, 0.78)     # Brilho limitado (evita cores muito claras/brancas)
+        
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        hex_color = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+        cores.append(hex_color)
+    return cores
+
+names_color = gerar_cores_escuras()
+random.shuffle(names_color)
+
+
 def create_embedded_files():    
     os.makedirs(path_outputs, exist_ok=True)
 
@@ -976,28 +980,45 @@ def decimal_coords(coords, ref):
 # -20° to 150° C (-4° to 302° F, High Gain Mode)
 #   0° to 500° C (32° to 932° F, Low Gain Mode)
 
+def _ratio_to_float(ratio):
+    """Converte o objeto Ratio do exifread para float com segurança."""
+    if ratio.den == 0:
+        return 0.0
+    return float(ratio.num) / float(ratio.den)
+
 
 def get_exif_info(img_path):
-    img = Image.open(img_path)
-    exif_raw = img._getexif()
+    with open(img_path, 'rb') as f:
+        # details=False ignora thumbnails embutidos, deixando a leitura ainda mais rápida
+        tags = exifread.process_file(f, details=False)
 
-    if not exif_raw:
+    if not tags:
         logging.warning(f"Sem dados EXIF: {img_path}")
         return None
 
-    exif = {ExifTags.TAGS[k]: v for k, v in exif_raw.items() if k in ExifTags.TAGS}
-
     try:
-        coordenadas = exif['GPSInfo']
-        altitude = coordenadas[6]
-        lat = decimal_coords(coordenadas[2], coordenadas[1])
-        lon = decimal_coords(coordenadas[4], coordenadas[3])
+        # Extração e conversão das coordenadas GPS (tupla de 3 Ratios: graus, minutos, segundos)
+        lat_vals = tuple(_ratio_to_float(r) for r in tags['GPS GPSLatitude'].values)
+        lat_ref = str(tags['GPS GPSLatitudeRef'].values).strip()
+        
+        lon_vals = tuple(_ratio_to_float(r) for r in tags['GPS GPSLongitude'].values)
+        lon_ref = str(tags['GPS GPSLongitudeRef'].values).strip()
+
+        lat = decimal_coords(lat_vals, lat_ref)
+        lon = decimal_coords(lon_vals, lon_ref)
+        altitude = _ratio_to_float(tags['GPS GPSAltitude'].values[0])
+
+        # Extração dos metadados da câmera e dimensões
+        focal_length = _ratio_to_float(tags['EXIF FocalLength'].values[0])
+        date_str = str(tags['Image DateTime'].values)
+        img_dim_x = int(tags['EXIF ExifImageWidth'].values[0])
+        img_dim_y = int(tags['EXIF ExifImageLength'].values[0]) # No padrão EXIF, altura é ExifImageLength
 
         return {
-            'focal_lenght': float(exif['FocalLength']),
-            'date': str(exif['DateTime']),
-            'img_dim_x': int(exif['ExifImageWidth']),
-            'img_dim_y': int(exif['ExifImageHeight']),
+            'focal_lenght': focal_length,
+            'date': date_str,
+            'img_dim_x': img_dim_x,
+            'img_dim_y': img_dim_y,
             'center_coords': (float(lat), float(lon)),
             'altitude': float(altitude)
         }
@@ -1255,43 +1276,8 @@ menu_def = [
     ['&Help', ['&About / Licenses']]
 ]
 
-# # 2. Definition of the Main Layout
-# layout = [[sg.Menu(menu_def, key='-MENU-', font=("Helvetica", 12, "bold"))],
-    
-#     # Folder selection
-#     [
-#         sg.Frame('STEP 1: Select the folder containing the images', [
-#             [
-#                 sg.In(enable_events=True, key="-FOLDER-", expand_x=True, expand_y=True),
-#                 sg.FolderBrowse()
-#             ]
-#         ], pad=(0, 0), expand_x=True, expand_y=False)
-#     ],
-    
-#     # Flights list
-#     [
-#         sg.Frame('Flights list:', [
-#             [
-#                 sg.Listbox(
-#                     values=[], 
-#                     enable_events=True, 
-#                     size=(40, 20), 
-#                     key="-FILE LIST-", 
-#                     expand_x=True, 
-#                     expand_y=True
-#                 )
-#             ]
-#         ], pad=(0, 0), expand_x=True, expand_y=True)
-#     ]
-# ]
-
-# # --------------------------------- Create Window ---------------------------------
-# window = sg.Window(title_name, layout, finalize=True, size=(width,height), location=(0,0),
-#                    keep_on_top=True, use_custom_titlebar=use_custom_titlebar,
-#                    enable_close_attempted_event=True, grab_anywhere=True, right_click_menu=None)
-
-
 # 2. Definition of the Main Layout
+default_text = 'Click "Browse..." on the right to select the root folder containing images of flights. E.g.: "FieldWorkCampaigns"'
 layout = [
     [sg.Menu(menu_def, key='-MENU-', font=("Helvetica", 12, "bold"))],
     
@@ -1299,8 +1285,8 @@ layout = [
     [
         sg.Frame('STEP 1: Select the folder containing the images', [
             [
-                sg.In(enable_events=True, key="-FOLDER-", expand_x=True, expand_y=True),
-                sg.FolderBrowse(key="-BROWSE-") # Adicionei uma key para poder desabilitar durante a busca
+                sg.In(enable_events=True, key="-FOLDER-", expand_x=True, expand_y=True, font=('Helvetica', 11), default_text=default_text),
+                sg.FolderBrowse(key="-BROWSE-") # Add key to desable during finding
             ]
         ], pad=(0, 0), expand_x=True, expand_y=False)
     ],
@@ -1329,9 +1315,17 @@ layout = [
 ]
 
 # --------------------------------- Create Window ---------------------------------
-window = sg.Window(title_name, layout, finalize=True, size=(width, height), location=(0, 0),
-                   keep_on_top=False, use_custom_titlebar=use_custom_titlebar,
-                   enable_close_attempted_event=True, grab_anywhere=True, right_click_menu=None)
+window = sg.Window(title_name, finalize=False, size=(width, height), location=(0, 0), resizable=True,
+                   keep_on_top=False, use_custom_titlebar=False, enable_close_attempted_event=True,
+                    grab_anywhere=True, right_click_menu=None)
+
+# Add layout and global settings in root of PySimpleGUI
+window.Layout(layout)
+window.Finalize()  # <-- Build window
+
+# Apply global changes in TKroot
+window.TKroot.option_add('*Menu.font', 'Helvetica 14 bold')
+window.TKroot.option_add('*Menu.tearOff', False)
 
 # Increases the global scale of the interface and native windows (FolderBrowse/FileDialog)
 # Values ​​between 1.5 and 2.0 work very well for high-resolution screens
