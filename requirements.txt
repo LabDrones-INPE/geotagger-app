@@ -1,4 +1,2 @@
 exifread
-numpy
-pandas
-pysimplegui
+pysimplegui #Tkinter variant

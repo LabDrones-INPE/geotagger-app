@@ -34,7 +34,6 @@ import exifread
 from pathlib import Path
 import colorsys
 import random
-import pandas as pd
 import datetime
 import tempfile
 import webbrowser
@@ -1027,31 +1026,68 @@ def get_exif_info(img_path):
         return None
 
 
-def write_track(nr,df_tmp, file_out):    
-    title = df_tmp.mission.iloc[0] + \
-    ' Starts:' + df_tmp.loc[0,['Date Shot']].values[0].split()[1] 
+# def write_track(nr,df_tmp, file_out):    
+#     title = df_tmp.mission.iloc[0] + \
+#     ' Starts:' + df_tmp.loc[0,['Date Shot']].values[0].split()[1] 
     
-    df_tmp['coordinates'] = df_tmp[['lon_deg', 'lat_deg']].apply(list, axis=1)
+#     df_tmp['coordinates'] = df_tmp[['lon_deg', 'lat_deg']].apply(list, axis=1)
     
-    w_js = 'var track'+str(nr)+' = { \n\
-      "type": "Feature", \n\
-      "geometry": { \n\
-      "type": "MultiPoint", \n\
-      "coordinates": ' +  df_tmp['coordinates'].to_json(orient='records', indent=8) + \
-      '}, \n\
-      "properties": { \n\
-        "title" : "' + title + '", \n\
-        "path_options" : { "color" : "'+ names_color[nr] + '" }, \n\
-        "images": ' + df_tmp['File'].to_json(orient='records', indent=10) + \
-       ', \n\
-        "time": ' + df_tmp['unix-timestamp'].to_json(orient='records', indent=10) + \
-       ', \n\
-        "altitude": ' + df_tmp['Altitude'].to_json(orient='records', indent=10) + \
-      '\n}, \n};\n'
+#     w_js = 'var track'+str(nr)+' = { \n\
+#       "type": "Feature", \n\
+#       "geometry": { \n\
+#       "type": "MultiPoint", \n\
+#       "coordinates": ' +  df_tmp['coordinates'].to_json(orient='records', indent=8) + \
+#       '}, \n\
+#       "properties": { \n\
+#         "title" : "' + title + '", \n\
+#         "path_options" : { "color" : "'+ names_color[nr] + '" }, \n\
+#         "images": ' + df_tmp['File'].to_json(orient='records', indent=10) + \
+#        ', \n\
+#         "time": ' + df_tmp['unix-timestamp'].to_json(orient='records', indent=10) + \
+#        ', \n\
+#         "altitude": ' + df_tmp['Altitude'].to_json(orient='records', indent=10) + \
+#       '\n}, \n};\n'
     
+#     with open(file_out, 'a', encoding='utf-8') as f:
+#         print(w_js, file=f)
+
+
+def write_track(nr, records_tmp, file_out):
+    if not records_tmp:
+        return
+
+    # Pega os dados do primeiro registro
+    first_row = records_tmp[0]
+    time_str = first_row['Date Shot'].split()[1]
+    title = f"{first_row['mission']} Starts:{time_str}"
+
+    # Extrai as listas de colunas
+    coordinates = [[r['lon_deg'], r['lat_deg']] for r in records_tmp]
+    images = [r['File'] for r in records_tmp]
+    times = [r['unix-timestamp'] for r in records_tmp]
+    altitudes = [r['Altitude'] for r in records_tmp]
+
+    # Monta a string JS usando json.dumps para manter a indentação
+    w_js = (
+        f'var track{nr} = {{ \n'
+        f'  "type": "Feature", \n'
+        f'  "geometry": {{ \n'
+        f'    "type": "MultiPoint", \n'
+        f'    "coordinates": {json.dumps(coordinates, indent=8)}\n'
+        f'  }}, \n'
+        f'  "properties": {{ \n'
+        f'    "title" : "{title}", \n'
+        f'    "path_options" : {{ "color" : "{names_color[nr]}" }}, \n'
+        f'    "images": {json.dumps(images, indent=10)}, \n'
+        f'    "time": {json.dumps(times, indent=10)}, \n'
+        f'    "altitude": {json.dumps(altitudes, indent=10)}\n'
+        f'  }}\n'
+        f'}};\n'
+    )
+
     with open(file_out, 'a', encoding='utf-8') as f:
         print(w_js, file=f)
-    
+
 
 def process_flights(flights_path):
     flights_path = sorted(flights_path)
@@ -1099,7 +1135,9 @@ def process_flights(flights_path):
         # 1. Colect and process data from each folder
         for i, path in enumerate(flights_path):
             appended_data = []
-            for file in Path(path).rglob('*.JPG'):
+            file_list = (file for file in Path(path).rglob('*.JPG') if file.suffix == '.JPG') # generator expression
+            for file in file_list:
+            #for file in Path(path).rglob('*.JPG'):
                 exif_info = get_exif_info(file)
 
                 if exif_info is None:
@@ -1126,16 +1164,23 @@ def process_flights(flights_path):
                 continue
 
             mission = os.path.basename(os.path.normpath(path)) + '_' + appended_data[0][1].split()[0].replace(':', '-')
-                        
-            df = pd.DataFrame(appended_data, columns=['File', 'Date Shot', 'lat_deg', 'lon_deg', 'Altitude', 'unix-timestamp'])
-            df['mission'] = mission
-            df = df.sort_values(by=['unix-timestamp'])            
-            
-            # Armazena o dataframe e o tempo inicial para ordenação global
-            all_flights_data.append({
-                'start_time': df['unix-timestamp'].min(),
-                'df': df
-            })
+
+            columns = ['File', 'Date Shot', 'lat_deg', 'lon_deg', 'Altitude', 'unix-timestamp']
+
+            flight_records = [
+                {**dict(zip(columns, row)), 'mission': mission}
+                for row in appended_data
+            ]
+
+            # Ordena os registros do voo pelo 'unix-timestamp'
+            flight_records.sort(key=lambda r: r['unix-timestamp'])
+
+            # Armazena os dados do voo e o tempo inicial para ordenação global
+            if flight_records:
+                all_flights_data.append({
+                    'start_time': flight_records[0]['unix-timestamp'],
+                    'records': flight_records 
+                })
 
             progress_bar.update_bar(i + 1)
             event, values = popup_win.read(timeout=0)
@@ -1156,7 +1201,7 @@ def process_flights(flights_path):
         
         if event != 'Cancel' and event != None:
             # 2. Global sorting: sort the flights chronologically by start time
-            all_flights_data = sorted(all_flights_data, key=lambda x: x['start_time'])
+            all_flights_data = sorted(all_flights_data, key=lambda x: x['start_time'])            
 
             tracks = []
             
@@ -1165,8 +1210,8 @@ def process_flights(flights_path):
             for new_idx, flight_item in enumerate(all_flights_data):
                 track_name = 'track' + str(new_idx)
                 tracks.append(track_name)
-                df_sorted = flight_item['df']
-                write_track(new_idx, df_sorted, target_file)
+                records_sorted = flight_item['records']
+                write_track(new_idx, records_sorted, target_file)
 
             # 3. Calc global bounding box and center
             min_lat, max_lat = min(all_lats), max(all_lats)
@@ -1252,7 +1297,8 @@ var labdronesTracks = [{', '.join(tracks)}];
         
 def find_flights(folder, window):
     try:
-        file_list = list(set([str(path.parent.parent) for path in Path(folder).rglob('*.JPG')]))
+        #file_list = list(set([str(path.parent.parent) for path in Path(folder).rglob('*.JPG')]))
+        file_list = list({str(path.parent.parent) for path in Path(folder).rglob('*.JPG') if path.suffix == '.JPG'})
     except Exception:
         file_list = []
     
@@ -1277,7 +1323,7 @@ menu_def = [
 ]
 
 # 2. Definition of the Main Layout
-default_text = 'Click "Browse..." on the right to select the root folder containing images of flights. E.g.: "FieldWorkCampaigns"'
+default_text = 'Click "Browse..." on the right to select the root folder containing images of flights.'
 layout = [
     [sg.Menu(menu_def, key='-MENU-', font=("Helvetica", 12, "bold"))],
     
@@ -1379,6 +1425,7 @@ while True:
             window.refresh()
             if not os.path.isdir(path_outputs):
                 create_embedded_files() # recreates files if necessary after application started
+            random.shuffle(names_color)
             process_flights(file_list)
         else:
             empty_msg = ["No flight containing .JPG files was found in the selected folder!"]
